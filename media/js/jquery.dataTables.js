@@ -1,11 +1,11 @@
-/*! DataTables 1.10.1-dev
+/*! DataTables 1.10.0
  * ©2008-2014 SpryMedia Ltd - datatables.net/license
  */
 
 /**
  * @summary     DataTables
  * @description Paginate, search and order HTML tables
- * @version     1.10.1-dev
+ * @version     1.10.0
  * @file        jquery.dataTables.js
  * @author      SpryMedia Ltd (www.sprymedia.co.uk)
  * @contact     www.sprymedia.co.uk/contact
@@ -31,7 +31,8 @@
 
 	if ( typeof define === 'function' && define.amd ) {
 		// Define as an AMD module if possible
-		define( 'datatables', ['jquery'], factory );
+		// define( 'datatables', ['jquery'], factory );
+		factory( jQuery );
 	}
     else if ( typeof exports === 'object' ) {
         // Node/CommonJS
@@ -649,16 +650,16 @@
 			attrTest(mDataSrc.sort) || attrTest(mDataSrc.type) || attrTest(mDataSrc.filter)
 		);
 	
-		oCol.fnGetData = function (rowData, type, meta) {
-			var innerData = mData( rowData, type, undefined, meta );
+		oCol.fnGetData = function (oData, sSpecific) {
+			var innerData = mData( oData, sSpecific );
 	
-			return mRender && type ?
-				mRender( innerData, type, rowData, meta ) :
-				innerData;
+			if ( oCol.mRender && (sSpecific && sSpecific !== '') )
+			{
+				return mRender( innerData, sSpecific, oData );
+			}
+			return innerData;
 		};
-		oCol.fnSetData = function ( rowData, val, meta ) {
-			return _fnSetObjectDataFn( mDataSrc )( rowData, val, meta );
-		};
+		oCol.fnSetData = _fnSetObjectDataFn( mDataSrc );
 	
 		/* Feature sorting overrides column specific when off */
 		if ( !oSettings.oFeatures.bSort )
@@ -1034,69 +1035,64 @@
 	
 	/**
 	 * Get the data for a given cell from the internal cache, taking into account data mapping
-	 *  @param {object} settings dataTables settings object
-	 *  @param {int} rowIdx aoData row id
-	 *  @param {int} colIdx Column index
-	 *  @param {string} type data get type ('display', 'type' 'filter' 'sort')
+	 *  @param {object} oSettings dataTables settings object
+	 *  @param {int} iRow aoData row id
+	 *  @param {int} iCol Column index
+	 *  @param {string} sSpecific data get type ('display', 'type' 'filter' 'sort')
 	 *  @returns {*} Cell data
 	 *  @memberof DataTable#oApi
 	 */
-	function _fnGetCellData( settings, rowIdx, coliDx, type )
+	function _fnGetCellData( oSettings, iRow, iCol, sSpecific )
 	{
-		var draw           = settings.iDraw;
-		var col            = settings.aoColumns[coliDx];
-		var rowData        = settings.aoData[rowIdx]._aData;
-		var defaultContent = col.sDefaultContent;
-		var cellData       = col.fnGetData( rowData, type, {
-			settings: settings,
-			row:      rowIdx,
-			col:      coliDx
-		} );
+		var oCol = oSettings.aoColumns[iCol];
+		var oData = oSettings.aoData[iRow]._aData;
+		var sData = oCol.fnGetData( oData, sSpecific );
 	
-		if ( cellData === undefined ) {
-			if ( settings.iDrawError != draw && defaultContent === null ) {
-				_fnLog( settings, 0, "Requested unknown parameter "+
-					(typeof col.mData=='function' ? '{function}' : "'"+col.mData+"'")+
-					" for row "+rowIdx, 4 );
-				settings.iDrawError = draw;
+		if ( sData === undefined )
+		{
+			if ( oSettings.iDrawError != oSettings.iDraw && oCol.sDefaultContent === null )
+			{
+				_fnLog( oSettings, 0, "Requested unknown parameter "+
+					(typeof oCol.mData=='function' ? '{function}' : "'"+oCol.mData+"'")+
+					" for row "+iRow, 4 );
+				oSettings.iDrawError = oSettings.iDraw;
 			}
-			return defaultContent;
+			return oCol.sDefaultContent;
 		}
 	
 		/* When the data source is null, we can use default column data */
-		if ( (cellData === rowData || cellData === null) && defaultContent !== null ) {
-			cellData = defaultContent;
+		if ( (sData === oData || sData === null) && oCol.sDefaultContent !== null )
+		{
+			sData = oCol.sDefaultContent;
 		}
-		else if ( typeof cellData === 'function' ) {
+		else if ( typeof sData === 'function' )
+		{
 			// If the data source is a function, then we run it and use the return
-			return cellData();
+			return sData();
 		}
 	
-		if ( cellData === null && type == 'display' ) {
+		if ( sData === null && sSpecific == 'display' )
+		{
 			return '';
 		}
-		return cellData;
+		return sData;
 	}
 	
 	
 	/**
 	 * Set the value for a specific cell, into the internal data cache
-	 *  @param {object} settings dataTables settings object
-	 *  @param {int} rowIdx aoData row id
-	 *  @param {int} colIdx Column index
+	 *  @param {object} oSettings dataTables settings object
+	 *  @param {int} iRow aoData row id
+	 *  @param {int} iCol Column index
 	 *  @param {*} val Value to set
 	 *  @memberof DataTable#oApi
 	 */
-	function _fnSetCellData( settings, rowIdx, colIdx, val )
+	function _fnSetCellData( oSettings, iRow, iCol, val )
 	{
-		var col     = settings.aoColumns[colIdx];
-		var rowData = settings.aoData[rowIdx]._aData;
+		var oCol = oSettings.aoColumns[iCol];
+		var oData = oSettings.aoData[iRow]._aData;
 	
-		col.fnSetData( rowData, val, {
-			settings: settings,
-			row:      rowIdx,
-			col:      colIdx
-		}  );
+		oCol.fnSetData( oData, val );
 	}
 	
 	
@@ -1112,7 +1108,7 @@
 	function _fnSplitObjNotation( str )
 	{
 		return $.map( str.match(/(\\.|[^\.])+/g), function ( s ) {
-			return s.replace(/\\./g, '.');
+			return s.replace('\\.', '.');
 		} );
 	}
 	
@@ -1136,24 +1132,24 @@
 				}
 			} );
 	
-			return function (data, type, row, meta) {
+			return function (data, type, extra) {
 				var t = o[type] || o._;
 				return t !== undefined ?
-					t(data, type, row, meta) :
+					t(data, type, extra) :
 					data;
 			};
 		}
 		else if ( mSource === null )
 		{
 			/* Give an empty string for rendering / sorting etc */
-			return function (data) { // type, row and meta also passed, but not used
+			return function (data, type) {
 				return data;
 			};
 		}
 		else if ( typeof mSource === 'function' )
 		{
-			return function (data, type, row, meta) {
-				return mSource( data, type, row, meta );
+			return function (data, type, extra) {
+				return mSource( data, type, extra );
 			};
 		}
 		else if ( typeof mSource === 'string' && (mSource.indexOf('.') !== -1 ||
@@ -1226,14 +1222,14 @@
 				return data;
 			};
 	
-			return function (data, type) { // row and meta also passed, but not used
+			return function (data, type) {
 				return fetchData( data, type, mSource );
 			};
 		}
 		else
 		{
 			/* Array or flat object mapping */
-			return function (data, type) { // row and meta also passed, but not used
+			return function (data, type) {
 				return data[mSource];
 			};
 		}
@@ -1261,12 +1257,12 @@
 		else if ( mSource === null )
 		{
 			/* Nothing to do when the data source is null */
-			return function () {};
+			return function (data, val) {};
 		}
 		else if ( typeof mSource === 'function' )
 		{
-			return function (data, val, meta) {
-				mSource( data, 'set', val, meta );
+			return function (data, val) {
+				mSource( data, 'set', val );
 			};
 		}
 		else if ( typeof mSource === 'string' && (mSource.indexOf('.') !== -1 ||
@@ -1336,14 +1332,14 @@
 				}
 			};
 	
-			return function (data, val) { // meta is also passed in, but not used
+			return function (data, val) {
 				return setData( data, val, mSource );
 			};
 		}
 		else
 		{
 			/* Array or flat object mapping */
-			return function (data, val) { // meta is also passed in, but not used
+			return function (data, val) {
 				data[mSource] = val;
 			};
 		}
@@ -1510,6 +1506,7 @@
 				d.push( contents );
 			}
 	
+			tds.push( cell );
 			i++;
 		};
 	
@@ -1520,7 +1517,6 @@
 	
 				if ( name == "TD" || name == "TH" ) {
 					cellProcess( td );
-					tds.push( td );
 				}
 	
 				td = td.nextSibling;
@@ -2680,7 +2676,7 @@
 			.attr('aria-controls', tableId);
 	
 		// Update the input elements whenever the table is filtered
-		$(settings.nTable).on( 'search.dt.DT', function () {
+		$(settings.nTable).on( 'filter.DT', function () {
 			// IE9 throws an 'unknown error' if document.activeElement is used
 			// inside an iframe or frame...
 			try {
@@ -3210,12 +3206,13 @@
 			div[0].id = tableId+'_length';
 		}
 	
-		div.children().append(
-			settings.oLanguage.sLengthMenu.replace( '_MENU_', select[0].outerHTML )
+		var a = settings.oLanguage.sLengthMenu.split(/(_MENU_)/);
+		div.children().append( a.length > 1 ?
+			[ a[0], select, a[2] ] :
+			a[0]
 		);
 	
-		// Can't use `select` variable as user might provide their own and the
-		// reference is broken by the use of outerHTML
+		// Can't use `select` variable, as user might provide their own select menu
 		$('select', div)
 			.val( settings._iDisplayLength )
 			.bind( 'change.DT', function(e) {
@@ -4533,11 +4530,6 @@
 			return idx+1 >= asSorting.length ? 0 : idx+1;
 		};
 	
-		// Convert to 2D array if needed
-		if ( typeof sorting[0] === 'number' ) {
-			sorting = settings.aaSorting = [ sorting ];
-		}
-	
 		// If appending the sort then we are multi-column sorting
 		if ( append && settings.oFeatures.bSortMulti ) {
 			// Are we already doing some kind of sort on this column?
@@ -4774,13 +4766,10 @@
 		oSettings._iDisplayStart    = oData.iStart;
 		oSettings.iInitDisplayStart = oData.iStart;
 		oSettings._iDisplayLength   = oData.iLength;
-		oSettings.aaSorting = [];
-	
-		$.each( oData.aaSorting, function ( i, col ) {
-			oSettings.aaSorting.push( col[0] >= columns.length ?
+		oSettings.aaSorting = $.map( oData.aaSorting, function ( col, i ) {
+			return col[0] >= columns.length ?
 				[ 0, col[1] ] :
-				col
-			);
+				col;
 		} );
 	
 		/* Search filtering  */
@@ -8701,7 +8690,7 @@
 	 *  @type string
 	 *  @default Version number
 	 */
-	DataTable.version = "1.10.1-dev";
+	DataTable.version = "1.10.0";
 
 	/**
 	 * Private data store, containing all of the settings objects that are
@@ -14386,9 +14375,9 @@
 	 *  @param {int} column Column index
 	 *  @param {bool} vis `false` if column now hidden, or `true` if visible
 	 */
-
+	 console.log('fn.dataTable');
 	return $.fn.dataTable;
 }));
-
+console.log('fn.dataTable - 1');
 }(window, document));
 
