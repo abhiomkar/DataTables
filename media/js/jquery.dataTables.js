@@ -14375,9 +14375,7 @@
 	 *  @param {int} column Column index
 	 *  @param {bool} vis `false` if column now hidden, or `true` if visible
 	 */
-	 console.log('fn.dataTable');
 	return $.fn.dataTable;
 }));
-console.log('fn.dataTable - 1');
 }(window, document));
 
